@@ -39,3 +39,10 @@ jobs:
             git pull --rebase origin main   # 兜底: 防手工推送/并发导致的 push 冲突
             git push
           }
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
