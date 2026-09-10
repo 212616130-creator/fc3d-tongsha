@@ -1,9 +1,10 @@
 name: fc3d-tongsha-daily
 on:
   schedule:
-    - cron: '0 14 * * *'
-    - cron: '30 15 * * *'
-    - cron: '0 17 * * *'
+     schedule:
+    - cron: '0 14 * * *'  # Runs at 14:00
+    - cron: '30 15 * * *' # Runs at 15:30
+    - cron: '0 17 * * *'  # Runs at 17:00
   workflow_dispatch:
 
 permissions:
