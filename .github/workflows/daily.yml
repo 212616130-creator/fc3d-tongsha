@@ -31,6 +31,13 @@ jobs:
         run: pip install numpy requests
       - name: run update (fetch + recompute + build html)
         run: python update.py
+      - name: 提交更新的数据
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "🤖自动更新福彩3D数据 $(date +'%Y-%m-%d %H:%M')" || echo "无新数据，跳过提交"
+          git push
       - name: commit & push
         run: |
           git config user.name "fc3d-bot"
