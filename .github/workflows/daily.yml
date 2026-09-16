@@ -2,16 +2,10 @@ name: fc3d-tongsha-daily
 
 on:
   schedule:
-    # 北京时间 22:00
     - cron: '0 14 * * *'
-
-    # 北京时间 23:30
     - cron: '30 15 * * *'
-
-    # 北京时间次日 01:00
     - cron: '0 17 * * *'
 
-  # 支持手动运行
   workflow_dispatch:
 
 permissions:
@@ -28,7 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # 注意：这里必须同时给 pages 和 id-token
     permissions:
       contents: write
       pages: write
@@ -40,37 +33,27 @@ jobs:
 
     steps:
 
-      # =========================
-      # 1. 拉取仓库
-      # =========================
+      # 1. 拉取代码
       - name: Checkout
         uses: actions/checkout@v4
 
-      # =========================
       # 2. Python
-      # =========================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      # =========================
       # 3. 安装依赖
-      # =========================
       - name: Install dependencies
         run: |
           pip install numpy requests
 
-      # =========================
-      # 4. 抓取开奖 + 重算 + 生成 index.html
-      # =========================
+      # 4. 更新数据、重新计算、生成 HTML
       - name: Update data and build HTML
         run: |
           python update.py
 
-      # =========================
-      # 5. 保存到 GitHub 仓库
-      # =========================
+      # 5. 提交数据和网页
       - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
@@ -78,8 +61,7 @@ jobs:
 
           git add fc3d-history.csv
           git add index.html
-          git add cache/
-          
+
           if git diff --cached --quiet; then
             echo "没有文件变化"
           else
@@ -87,30 +69,24 @@ jobs:
             git push
           fi
 
-      # =========================
-      # 6. GitHub Pages
-      # =========================
+      # 6. 配置 GitHub Pages
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      # 只把网站文件放进 Pages
+      # 7. 准备网站文件
       - name: Prepare Pages
         run: |
           rm -rf _site
           mkdir -p _site
           cp index.html _site/index.html
 
-      # =========================
-      # 7. 上传 Pages
-      # =========================
+      # 8. 上传 Pages 文件
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: '_site'
 
-      # =========================
-      # 8. 部署 Pages
-      # =========================
+      # 9. 部署 GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
