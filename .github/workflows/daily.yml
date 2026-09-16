@@ -2,58 +2,96 @@ name: fc3d-tongsha-daily
 
 on:
   schedule:
+    # 北京时间 22:00
     - cron: '0 14 * * *'
+
+    # 北京时间 23:30
     - cron: '30 15 * * *'
+
+    # 北京时间次日 01:00
     - cron: '0 17 * * *'
 
+  # 允许手动运行
   workflow_dispatch:
 
+# GitHub Actions 权限
 permissions:
   contents: write
   pages: write
   id-token: write
 
+# 防止多个任务同时修改仓库
 concurrency:
   group: fc3d-tongsha-update
   cancel-in-progress: false
 
 jobs:
+
   update:
+
     runs-on: ubuntu-latest
+
     timeout-minutes: 30
 
+    # 这个 Job 同时需要：
+    # 1. 写入仓库
+    # 2. 部署 GitHub Pages
     permissions:
       contents: write
       pages: write
       id-token: write
 
+    # GitHub Pages 环境
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
 
-      # 1. 拉取代码
+      # ==========================================
+      # 1. 获取仓库代码
+      # ==========================================
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # 2. Python
+      # ==========================================
+      # 2. 设置 Python
+      # ==========================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
+      # ==========================================
       # 3. 安装依赖
+      # ==========================================
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install numpy requests
 
-      # 4. 更新数据、重新计算、生成 HTML
+      # ==========================================
+      # 4. 更新数据
+      #
+      # update.py 负责：
+      # - 获取最新开奖
+      # - 更新 fc3d-history.csv
+      # - 重新计算
+      # - 生成 index.html
+      # ==========================================
       - name: Update data and build HTML
         run: |
           python update.py
 
-      # 5. 提交数据和网页
+      # ==========================================
+      # 5. 提交更新后的数据和网页
+      #
+      # 注意：
+      # 不添加 cache/
+      # 因为 cache/ 在 .gitignore 中
+      # ==========================================
       - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
@@ -63,30 +101,44 @@ jobs:
           git add index.html
 
           if git diff --cached --quiet; then
-            echo "没有文件变化"
+            echo "没有检测到需要提交的文件变化"
           else
-            git commit -m "🤖 自动更新福彩3D数据"
-            git push
+            git commit -m "🤖 自动更新福彩3D数据 $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push origin HEAD:main
           fi
 
+      # ==========================================
       # 6. 配置 GitHub Pages
+      # ==========================================
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      # ==========================================
       # 7. 准备网站文件
+      #
+      # GitHub Pages 只需要 index.html
+      # ==========================================
       - name: Prepare Pages
         run: |
           rm -rf _site
           mkdir -p _site
+
           cp index.html _site/index.html
 
-      # 8. 上传 Pages 文件
+          echo "===== Pages 文件 ====="
+          ls -lah _site
+
+      # ==========================================
+      # 8. 上传 Pages Artifact
+      # ==========================================
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: '_site'
 
-      # 9. 部署 GitHub Pages
+      # ==========================================
+      # 9. 部署到 GitHub Pages
+      # ==========================================
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
