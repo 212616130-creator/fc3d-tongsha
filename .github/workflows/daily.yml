@@ -1,17 +1,24 @@
 name: fc3d-tongsha-daily
+
 on:
   schedule:
-    - cron: '0 14 * * *'   # 北京 22:00
-    - cron: '30 15 * * *'  # 北京 23:30
-    - cron: '0 17 * * *'   # 北京 01:00
+    # 北京时间 22:00
+    - cron: '0 14 * * *'
+
+    # 北京时间 23:30
+    - cron: '30 15 * * *'
+
+    # 北京时间次日 01:00
+    - cron: '0 17 * * *'
+
+  # 支持手动运行
   workflow_dispatch:
 
 permissions:
   contents: write
-  id-token: write
   pages: write
+  id-token: write
 
-# 防排队: 同一时间只允许一个运行
 concurrency:
   group: fc3d-tongsha-update
   cancel-in-progress: false
@@ -19,32 +26,91 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write   # 仅此 job 需要写仓库(commit+push)
     timeout-minutes: 30
+
+    # 注意：这里必须同时给 pages 和 id-token
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      # =========================
+      # 1. 拉取仓库
+      # =========================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # =========================
+      # 2. Python
+      # =========================
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: install deps
-        run: pip install numpy requests
-      - name: run update (fetch + recompute + build html)
-        run: python update.py
-      - name: 提交更新的数据
+
+      # =========================
+      # 3. 安装依赖
+      # =========================
+      - name: Install dependencies
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "🤖自动更新福彩3D数据 $(date +'%Y-%m-%d %H:%M')" || echo "无新数据，跳过提交"
-          git push
-      - name: commit & push
+          pip install numpy requests
+
+      # =========================
+      # 4. 抓取开奖 + 重算 + 生成 index.html
+      # =========================
+      - name: Update data and build HTML
         run: |
-          git config user.name "fc3d-bot"
-          git config user.email "bot@fc3d.local"
-          git add fc3d-history.csv index.html core.py formulas.py export_static.py update.py .github/workflows/daily.yml
-          git diff --staged --quiet && echo "无变更, 跳过推送" || {
-            git commit -m "auto: $(date -u +'%Y-%m-%d %H:%M') UTC"
-            git pull --rebase origin main   # 兜底: 防手工推送/并发导致的 push 冲突
+          python update.py
+
+      # =========================
+      # 5. 保存到 GitHub 仓库
+      # =========================
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add fc3d-history.csv
+          git add index.html
+          git add cache/
+          
+          if git diff --cached --quiet; then
+            echo "没有文件变化"
+          else
+            git commit -m "🤖 自动更新福彩3D数据"
             git push
-          }
+          fi
+
+      # =========================
+      # 6. GitHub Pages
+      # =========================
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # 只把网站文件放进 Pages
+      - name: Prepare Pages
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp index.html _site/index.html
+
+      # =========================
+      # 7. 上传 Pages
+      # =========================
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      # =========================
+      # 8. 部署 Pages
+      # =========================
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
